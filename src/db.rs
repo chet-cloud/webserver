@@ -1,7 +1,7 @@
 use rusqlite::{Connection, Result, OpenFlags};
 
 pub struct User {
-    id: String,
+    id: i32,
     name: String,
     data: Option<Vec<u8>>,
 }
@@ -27,23 +27,25 @@ pub fn init(){
     get_connection().execute(
         "
 
-            CREATE TABLE IF NOT EXISTS Record (
-                id      TEXT PRIMARY KEY,
-                day     TEXT NOT NULL,
-                userId  INTEGER NOT NULL,
-                start   INTERGER NOT NULL,
-                finish  INTERGER NOT NULL
-            );
+        CREATE TABLE IF NOT EXISTS User (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            name    TEXT NOT NULL,
+            data    BLOB
+        );
+
+        CREATE TABLE IF NOT EXISTS Record (
+            id      TEXT PRIMARY KEY,
+            day     TEXT NOT NULL,
+            userId  INTEGER NOT NULL,
+            start   INTERGER NOT NULL,
+            finish  INTERGER NOT NULL
+        );
             
-            CREATE TABLE IF NOT EXISTS User (
-                id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                name    TEXT NOT NULL,
-                data    BLOB,
-            );
         
         ",
         (), // empty list of parameters.
     ).unwrap();
+    
 }
 
 // https://codebeautify.org/string-binary-converter
@@ -97,16 +99,19 @@ pub fn get_user_by_name(name : &str) -> Result<User, rusqlite::Error> {
     })?.next().ok_or(rusqlite::Error::InvalidQuery)?;
 }
 
-pub fn get_user_by_id(id :isize) -> Result<User, rusqlite::Error> {
+pub fn get_user_by_id(id :i32) -> Result<User, rusqlite::Error> {
     let conn = get_connection();
-    let mut stmt = conn.prepare("SELECT * FROM User where id is ?2")?;
-    return stmt.query_map([&id.to_string()], |row| {
+    let mut stmt = conn.prepare("select id, name, data from user where id = ?")?;
+    let result = stmt.query_map([id], |row| {
         Ok(User {
             id: row.get(0)?,
             name: row.get(1)?,
             data: row.get(2)?,
         })
-    })?.next().ok_or(rusqlite::Error::InvalidQuery)?;
+    })?.next();//.next().ok_or(rusqlite::Error::InvalidQuery)?;
+    let result = result;
+    let result = result.ok_or(rusqlite::Error::InvalidQuery)?;
+    return result;
 }
 
 pub fn delete_record_by_id(id : &str) -> Result<usize, rusqlite::Error> {
@@ -161,9 +166,12 @@ pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) 
 
 
 
-
 #[cfg(test)]
 mod tests {
+    extern crate blob;
+    use std::{str::FromStr, error::Error};
+    use blob::Blob;
+
     use crate::db::*;
     use std::fs;
 
@@ -172,77 +180,26 @@ mod tests {
     }
 
     #[test]
-    fn add_user_test() {
+    fn add_user_test(){
         init();
-
         add_user(User{
-            id: 1.to_string(),
+            id: 0,
             name: "cc".to_string(),
-            data: todo!(),
+            data: Some("{a:1}".as_bytes().to_vec())
         });
 
-        assert_eq!(4, 4);
+        let u = get_user_by_id(1).expect("get_user_by_id error");
+        assert_eq!(&u.name, "cc");
+        let dataArr = u.data.unwrap();
+        let dataStr = std::str::from_utf8(&dataArr).unwrap();
+        assert_eq!(dataStr, "{a:1}");
+
+        removeDB();
     }
 
 
 
+    
+
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-// #[derive(Debug)]
-// struct Person {
-//     id: i32,
-//     name: String,
-//     data: Option<Vec<u8>>,
-// }
-
-// pub fn run() -> Result<()> {
-//     let conn = Connection::open_with_flags("./db",
-//             OpenFlags::SQLITE_OPEN_READ_WRITE
-//                 | OpenFlags::SQLITE_OPEN_CREATE
-//                 | OpenFlags::SQLITE_OPEN_URI
-//                 // | OpenFlags::SQLITE_OPEN_NO_MUTEX
-//             ).unwrap();
-
-//     conn.execute(
-//         "CREATE TABLE person (
-//             id   INTEGER PRIMARY KEY,
-//             name TEXT NOT NULL,
-//             data BLOB
-//         )",
-//         (), // empty list of parameters.
-//     )?;
-//     let me = Person {
-//         id: 0,
-//         name: "Steven".to_string(),
-//         data: None,
-//     };
-//     conn.execute(
-//         "INSERT INTO person (name, data) VALUES (?1, ?2)",
-//         (&me.name, &me.data),
-//     )?;
-
-//     let mut stmt = conn.prepare("SELECT id, name, data FROM person")?;
-//     let person_iter = stmt.query_map([], |row| {
-//         Ok(Person {
-//             id: row.get(0)?,
-//             name: row.get(1)?,
-//             data: row.get(2)?,
-//         })
-//     })?;
-
-//     for person in person_iter {
-//         println!("Found person {:?}", person.unwrap());
-//     }
-//     Ok(())
-// }
