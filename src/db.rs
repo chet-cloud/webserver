@@ -14,17 +14,21 @@ pub struct Record {
     finish: i32,
 }
 
-pub fn get_connection() -> Connection {
-    return Connection::open_with_flags("./db",
-            OpenFlags::SQLITE_OPEN_READ_WRITE
-                | OpenFlags::SQLITE_OPEN_CREATE
-                | OpenFlags::SQLITE_OPEN_URI
-                // | OpenFlags::SQLITE_OPEN_NO_MUTEX
-            ).unwrap();
+pub fn get_connection() ->  Result<Connection> {
+        // return Connection::open_in_memory().unwrap();
+        return Connection::open_with_flags("./db",
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_URI
+            // | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        );
+    
+
 }
 
-pub fn init(){
-    get_connection().execute(
+pub fn init()-> Result<(), rusqlite::Error> {
+    let conn = get_connection()?;
+    conn.execute(
         "
 
         CREATE TABLE IF NOT EXISTS User (
@@ -35,9 +39,9 @@ pub fn init(){
         
         ",
         (), // empty list of parameters.
-    ).unwrap();
+    );
 
-    get_connection().execute(
+    conn.execute(
         "
 
         CREATE TABLE IF NOT EXISTS Record (
@@ -50,14 +54,16 @@ pub fn init(){
         
         ",
         (), // empty list of parameters.
-    ).unwrap();
+    );
+    return Ok(())
     
 }
 
 // https://codebeautify.org/string-binary-converter
 // https://www.binaryhexconverter.com/binary-to-hex-converter
-pub fn insert_fake_date(){
-    get_connection().execute(
+pub fn insert_fake_date()-> Result<usize, rusqlite::Error> {
+    let conn = get_connection()?;
+    return conn.execute(
         "
 
             insert INTO User (id, name) VALUES ('2', '1', X'7B613A317D');
@@ -71,19 +77,21 @@ pub fn insert_fake_date(){
             
         ",
         (), // empty list of parameters.
-    ).unwrap();
+    );
 
 }
 
 pub fn add_user(user : &User) -> Result<usize, rusqlite::Error> {
-    return get_connection().execute(
+    let conn = get_connection()?;
+    return conn.execute(
         "insert into User (name,data) values (?1,?2)",
         (user.name.to_string(),user.data.as_ref()),
     );
 }
 
 pub fn update_user(user : &User) -> Result<usize, rusqlite::Error> {
-    return get_connection().execute(
+    let conn = get_connection()?;
+    return conn.execute(
         "
             UPDATE User
             SET name = ?1, data = ?2
@@ -94,7 +102,7 @@ pub fn update_user(user : &User) -> Result<usize, rusqlite::Error> {
 }
 
 pub fn get_user_by_name(name : &str) -> Result<User, rusqlite::Error> {
-    let conn = get_connection();
+    let conn = get_connection()?;
     let mut stmt = conn.prepare("SELECT * FROM User where name is ?1")?;
     return stmt.query_map([name], |row| {
         Ok(User {
@@ -106,7 +114,7 @@ pub fn get_user_by_name(name : &str) -> Result<User, rusqlite::Error> {
 }
 
 pub fn get_user_by_id(id :i32) -> Result<User, rusqlite::Error> {
-    let conn = get_connection();
+    let conn = get_connection()?;
     let mut stmt = conn.prepare("select id, name, data from user where id = ?")?;
     let result = stmt.query_map([id], |row| {
         Ok(User {
@@ -120,7 +128,7 @@ pub fn get_user_by_id(id :i32) -> Result<User, rusqlite::Error> {
 }
 
 pub fn add_record(record : &Record) -> Result<usize, rusqlite::Error> {
-    return get_connection().execute(
+    return get_connection()?.execute(
         "
             insert into Record (id,day,userId,start,finish)
             values (?1,?2,?3,?4,?5)
@@ -130,7 +138,7 @@ pub fn add_record(record : &Record) -> Result<usize, rusqlite::Error> {
 }
 
 pub fn get_record_by_id(id :&str) -> Result<Record, rusqlite::Error> {
-    let conn = get_connection();
+    let conn = get_connection()?;
     let mut stmt = conn.prepare("
         select id, day, userId, start, finish
         from Record 
@@ -150,17 +158,17 @@ pub fn get_record_by_id(id :&str) -> Result<Record, rusqlite::Error> {
 }
 
 pub fn delete_record_by_id(id : &str) -> Result<usize, rusqlite::Error> {
-    return Ok(get_connection().execute(
+    return Ok(get_connection()?.execute(
         "delete from Record where id = ?1",
         [id],
     )?);
 }
 
 pub fn update_record(record : &Record) -> Result<usize, rusqlite::Error> {
-    return Ok(get_connection().execute(
+    return Ok(get_connection()?.execute(
         "
             UPDATE Record
-            SET day = ?1, from = ?2, to = ?3
+            SET day = ?1, start = ?2, finish = ?3
             WHERE id = ?4
         ",
         (&record.day, &record.start.to_string(),&record.finish.to_string(), &record.id.to_string()),
@@ -168,7 +176,7 @@ pub fn update_record(record : &Record) -> Result<usize, rusqlite::Error> {
 }
 
 pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) -> Result<Vec<(Record, User)>, rusqlite::Error>{
-    let conn = get_connection();
+    let conn = get_connection()?;
     let mut stmt = conn.prepare("
         SELECT id,day,userId,start,finish,name,data FROM Record 
         join User on User.id = Record.userId
@@ -200,12 +208,9 @@ pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) 
 
 
 
+
 #[cfg(test)]
 mod tests {
-    extern crate blob;
-    use std::{str::FromStr, error::Error};
-    use blob::Blob;
-
     use crate::db::*;
     use std::fs;
 
@@ -232,7 +237,6 @@ mod tests {
         removeDB();
     }
 
-
     #[test]
     fn get_user_by_name_test(){
         init();
@@ -253,7 +257,6 @@ mod tests {
         removeDB();
     }
 
-
     #[test]
     fn add_record_test(){
         init();
@@ -271,9 +274,34 @@ mod tests {
         removeDB();
     }
 
+    #[test]
+    fn delete_record_by_id_test(){
+        init();
+        let result = add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 1, finish: 12 }).unwrap();
+        assert_eq!(result, 1);
+        let re = delete_record_by_id("room1-r1-r1").unwrap();
+        assert_eq!(re, 1);
+        removeDB();
+    }
 
+    #[test]
+    fn update_record_test(){
+        init();
+        let result = add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 1, finish: 12 }).unwrap();
+        assert_eq!(result, 1);
 
-    
+        let re = update_record(&Record { id: "room1-r1-r1".to_string(), day: "1111-11-11".to_string(), userId: 2, start: 2, finish: 13 }).unwrap();
+        assert_eq!(re, 1);
+
+        let re = get_record_by_id("room1-r1-r1").unwrap();
+        assert_eq!(re.id, "room1-r1-r1");
+        assert_eq!(re.day, "1111-11-11");
+        assert_eq!(re.userId, 1); // userId didn't change
+        assert_eq!(re.start, 2);
+        assert_eq!(re.finish, 13);
+
+        removeDB();
+    }
 
 
 }
