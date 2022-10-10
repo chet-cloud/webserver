@@ -82,11 +82,16 @@ pub fn insert_fake_date()-> Result<usize, rusqlite::Error> {
 }
 
 pub fn add_user(user : &User) -> Result<usize, rusqlite::Error> {
+
     let conn = get_connection()?;
-    return conn.execute(
-        "insert into User (name,data) values (?1,?2)",
-        (user.name.to_string(),user.data.as_ref()),
-    );
+    let mut stmt = conn.prepare("
+        insert into User (name,data) values (?1,?2); SELECT last_insert_rowid();
+    ")?;
+    let result = stmt.query_map((user.name.to_string(),user.data.as_ref()), |row| {
+        Ok(row.get(0)?)
+    })?.next().ok_or(rusqlite::Error::InvalidQuery)?;
+    return result;
+
 }
 
 pub fn update_user(user : &User) -> Result<usize, rusqlite::Error> {
@@ -142,9 +147,9 @@ pub fn get_record_by_id(id :&str) -> Result<Record, rusqlite::Error> {
     let mut stmt = conn.prepare("
         select id, day, userId, start, finish
         from Record 
-        where id = 'room1-r1-r1'
+        where id = ?1
     ")?;
-    let result = stmt.query_map([], |row| {
+    let result = stmt.query_map([id], |row| {
         Ok(Record {
             id: row.get(0)?,
             day: row.get(1)?,
@@ -209,6 +214,7 @@ pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) 
 
 
 
+
 #[cfg(test)]
 mod tests {
     use crate::db::*;
@@ -221,12 +227,12 @@ mod tests {
     #[test]
     fn add_user_test(){
         init();
-        let result = add_user(&User{
+        let id = add_user(&User{
             id: 0,
             name: "cc".to_string(),
             data: Some("{a:1}".as_bytes().to_vec())
         }).unwrap();
-        assert_eq!(result, 1);
+        assert_eq!(id, 1);
 
         let u = get_user_by_id(1).expect("get_user_by_id error");
         assert_eq!(&u.name, "cc");
@@ -240,13 +246,13 @@ mod tests {
     #[test]
     fn get_user_by_name_test(){
         init();
-        let result = add_user(&User{
+        let id = add_user(&User{
             id: 0,
             name: "cc".to_string(),
             data: Some("{a:1}".as_bytes().to_vec())
         }).unwrap();
 
-        assert_eq!(result, 1);
+        assert_eq!(id, 1);
 
         let u = get_user_by_name("cc").expect("get_user_by_name error");
         assert_eq!(&u.name, "cc");
@@ -302,6 +308,27 @@ mod tests {
 
         removeDB();
     }
+
+    #[test]
+    fn get_records_by_like_roomid_day_userid_test(){
+        init();
+
+        let result = add_user(&User{
+            id: 0,
+            name: "cc".to_string(),
+            data: Some("{a:1}".as_bytes().to_vec())
+        }).unwrap();
+        assert_eq!(result, 1);
+        let result = add_user(&User{
+            id: 0,
+            name: "cc".to_string(),
+            data: Some("{a:1}".as_bytes().to_vec())
+        }).unwrap();
+        assert_eq!(result, 1);
+
+        removeDB();
+    }
+
 
 
 }
