@@ -32,6 +32,13 @@ pub fn init(){
             name    TEXT NOT NULL,
             data    BLOB
         );
+        
+        ",
+        (), // empty list of parameters.
+    ).unwrap();
+
+    get_connection().execute(
+        "
 
         CREATE TABLE IF NOT EXISTS Record (
             id      TEXT PRIMARY KEY,
@@ -40,7 +47,6 @@ pub fn init(){
             start   INTERGER NOT NULL,
             finish  INTERGER NOT NULL
         );
-            
         
         ",
         (), // empty list of parameters.
@@ -69,22 +75,22 @@ pub fn insert_fake_date(){
 
 }
 
-pub fn add_user(user : User) -> Result<usize, rusqlite::Error> {
-    return Ok(get_connection().execute(
+pub fn add_user(user : &User) -> Result<usize, rusqlite::Error> {
+    return get_connection().execute(
         "insert into User (name,data) values (?1,?2)",
-        (user.name,user.data),
-    )?);
+        (user.name.to_string(),user.data.as_ref()),
+    );
 }
 
-pub fn update_user(user : User) -> Result<usize, rusqlite::Error> {
-    return Ok(get_connection().execute(
+pub fn update_user(user : &User) -> Result<usize, rusqlite::Error> {
+    return get_connection().execute(
         "
             UPDATE User
             SET name = ?1, data = ?2
             WHERE id = ?3;
         ",
-        (user.name,user.data,user.id),
-    )?);
+        (user.name.to_string(),user.data.as_ref(),user.id),
+    );
 }
 
 pub fn get_user_by_name(name : &str) -> Result<User, rusqlite::Error> {
@@ -108,8 +114,37 @@ pub fn get_user_by_id(id :i32) -> Result<User, rusqlite::Error> {
             name: row.get(1)?,
             data: row.get(2)?,
         })
-    })?.next();//.next().ok_or(rusqlite::Error::InvalidQuery)?;
-    let result = result;
+    })?.next();
+    let result = result.ok_or(rusqlite::Error::InvalidQuery)?;
+    return result;
+}
+
+pub fn add_record(record : &Record) -> Result<usize, rusqlite::Error> {
+    return get_connection().execute(
+        "
+            insert into Record (id,day,userId,start,finish)
+            values (?1,?2,?3,?4,?5)
+        ",
+        (&record.id.to_string(), &record.day, &record.userId.to_string(),&record.start.to_string(),&record.finish.to_string()),
+    );
+}
+
+pub fn get_record_by_id(id :&str) -> Result<Record, rusqlite::Error> {
+    let conn = get_connection();
+    let mut stmt = conn.prepare("
+        select id, day, userId, start, finish
+        from Record 
+        where id = 'room1-r1-r1'
+    ")?;
+    let result = stmt.query_map([], |row| {
+        Ok(Record {
+            id: row.get(0)?,
+            day: row.get(1)?,
+            userId: row.get(2)?,
+            start: row.get(3)?,
+            finish: row.get(4)?,
+        })
+    })?.next();
     let result = result.ok_or(rusqlite::Error::InvalidQuery)?;
     return result;
 }
@@ -165,7 +200,6 @@ pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) 
 
 
 
-
 #[cfg(test)]
 mod tests {
     extern crate blob;
@@ -182,17 +216,57 @@ mod tests {
     #[test]
     fn add_user_test(){
         init();
-        add_user(User{
+        let result = add_user(&User{
             id: 0,
             name: "cc".to_string(),
             data: Some("{a:1}".as_bytes().to_vec())
-        });
+        }).unwrap();
+        assert_eq!(result, 1);
 
         let u = get_user_by_id(1).expect("get_user_by_id error");
         assert_eq!(&u.name, "cc");
         let dataArr = u.data.unwrap();
         let dataStr = std::str::from_utf8(&dataArr).unwrap();
         assert_eq!(dataStr, "{a:1}");
+
+        removeDB();
+    }
+
+
+    #[test]
+    fn get_user_by_name_test(){
+        init();
+        let result = add_user(&User{
+            id: 0,
+            name: "cc".to_string(),
+            data: Some("{a:1}".as_bytes().to_vec())
+        }).unwrap();
+
+        assert_eq!(result, 1);
+
+        let u = get_user_by_name("cc").expect("get_user_by_name error");
+        assert_eq!(&u.name, "cc");
+        let data_arr = u.data.unwrap();
+        let data_str = std::str::from_utf8(&data_arr).unwrap();
+        assert_eq!(data_str, "{a:1}");
+
+        removeDB();
+    }
+
+
+    #[test]
+    fn add_record_test(){
+        init();
+        let result = add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 1, finish: 12 }).unwrap();
+        assert_eq!(result, 1);
+
+        let re = get_record_by_id("room1-r1-r1").unwrap();
+
+        assert_eq!(re.id, "room1-r1-r1");
+        assert_eq!(re.day, "2022-10-09");
+        assert_eq!(re.userId, 1);
+        assert_eq!(re.start, 1);
+        assert_eq!(re.finish, 12);
 
         removeDB();
     }
