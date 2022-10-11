@@ -1,18 +1,21 @@
+
 use rusqlite::{Connection, Result, OpenFlags};
 
+#[derive(Debug)]
 pub struct User {
-    id: i32,
+    id: usize,
     name: String,
     data: Option<Vec<u8>>,
 }
-
+#[derive(Debug)]
 pub struct Record {
     id: String,
     day: String,
-    userId: i32,
-    start: i32,
-    finish: i32,
+    userId: usize,
+    start: usize,
+    finish: usize,
 }
+
 
 pub fn get_connection() ->  Result<Connection> {
         // return Connection::open_in_memory().unwrap();
@@ -34,7 +37,8 @@ pub fn init()-> Result<(), rusqlite::Error> {
         CREATE TABLE IF NOT EXISTS User (
             id      INTEGER PRIMARY KEY AUTOINCREMENT,
             name    TEXT NOT NULL,
-            data    BLOB
+            data    BLOB,
+            UNIQUE(name)
         );
         
         ",
@@ -45,7 +49,7 @@ pub fn init()-> Result<(), rusqlite::Error> {
         "
 
         CREATE TABLE IF NOT EXISTS Record (
-            id      TEXT PRIMARY KEY,
+            id      TEXT KEY,
             day     TEXT NOT NULL,
             userId  INTEGER NOT NULL,
             start   INTERGER NOT NULL,
@@ -55,6 +59,14 @@ pub fn init()-> Result<(), rusqlite::Error> {
         ",
         (), // empty list of parameters.
     );
+
+    conn.execute(
+        "
+        CREATE INDEX Record_id ON Record (id);
+        ",
+        (), // empty list of parameters.
+    );
+
     return Ok(())
     
 }
@@ -85,7 +97,7 @@ pub fn add_user(user : &User) -> Result<usize, rusqlite::Error> {
 
     let conn = get_connection()?;
     let mut stmt = conn.prepare("
-        insert into User (name,data) values (?1,?2); SELECT last_insert_rowid();
+        insert into User (name,data) values (?1,?2) RETURNING id; 
     ")?;
     let result = stmt.query_map((user.name.to_string(),user.data.as_ref()), |row| {
         Ok(row.get(0)?)
@@ -213,8 +225,6 @@ pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) 
 
 
 
-
-
 #[cfg(test)]
 mod tests {
     use crate::db::*;
@@ -227,6 +237,7 @@ mod tests {
     #[test]
     fn add_user_test(){
         init();
+
         let id = add_user(&User{
             id: 0,
             name: "cc".to_string(),
@@ -234,11 +245,18 @@ mod tests {
         }).unwrap();
         assert_eq!(id, 1);
 
+        let id = add_user(&User{
+            id: 0,
+            name: "ff".to_string(),
+            data: Some("{a:1}".as_bytes().to_vec())
+        }).unwrap();
+        assert_eq!(id, 2);
+
         let u = get_user_by_id(1).expect("get_user_by_id error");
         assert_eq!(&u.name, "cc");
-        let dataArr = u.data.unwrap();
-        let dataStr = std::str::from_utf8(&dataArr).unwrap();
-        assert_eq!(dataStr, "{a:1}");
+        let data_arr = u.data.unwrap();
+        let data_str = std::str::from_utf8(&data_arr).unwrap();
+        assert_eq!(data_str, "{a:1}");
 
         removeDB();
     }
@@ -313,18 +331,21 @@ mod tests {
     fn get_records_by_like_roomid_day_userid_test(){
         init();
 
-        let result = add_user(&User{
+        let id = add_user(&User{
             id: 0,
             name: "cc".to_string(),
             data: Some("{a:1}".as_bytes().to_vec())
         }).unwrap();
+        assert_eq!(id, 1);
+
+        let result = add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: id, start: 1, finish: 12 }).unwrap();
         assert_eq!(result, 1);
-        let result = add_user(&User{
-            id: 0,
-            name: "cc".to_string(),
-            data: Some("{a:1}".as_bytes().to_vec())
-        }).unwrap();
+
+        let result = add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: id, start: 13, finish: 36 }).unwrap();
         assert_eq!(result, 1);
+
+        let result = get_records_by_like_roomid_day_userid("room1-r1-r1","2022-10-09",&id.to_string()).unwrap();
+        println!("{:?}",result);
 
         removeDB();
     }
