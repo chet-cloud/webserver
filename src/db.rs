@@ -195,9 +195,10 @@ pub fn update_record(record : &Record) -> Result<usize, rusqlite::Error> {
 pub fn get_records_by_like_roomid_day_userid(id : &str, day: &str, userid:&str) -> Result<Vec<(Record, User)>, rusqlite::Error>{
     let conn = get_connection()?;
     let mut stmt = conn.prepare("
-        SELECT id,day,userId,start,finish,name,data FROM Record 
+        SELECT Record.id, Record.day, Record.userId, Record.start, Record.finish, User.name, User.data 
+        FROM Record 
         join User on User.id = Record.userId
-        where id LIKE ?1 and day LIKE ?2 amd userId like ?3
+        where Record.id LIKE ?1 and Record.day LIKE ?2 and Record.userId like ?3
     ")?;
     let records = stmt.query_map([id,day,userid], |row| {
         Ok((
@@ -345,7 +346,19 @@ mod tests {
         assert_eq!(result, 1);
 
         let result = get_records_by_like_roomid_day_userid("room1-r1-r1","2022-10-09",&id.to_string()).unwrap();
-        println!("{:?}",result);
+        //println!("{:?}",result);
+
+        // [
+        //     (
+        //         Record { id: "room1-r1-r1", day: "2022-10-09", userId: 1, start: 1, finish: 12 }, 
+        //         User { id: 1, name: "cc", data: Some([123, 97, 58, 49, 125]) }
+        //     ), 
+        //     (
+        //         Record { id: "room1-r1-r1", day: "2022-10-09", userId: 1, start: 13, finish: 36 }, 
+        //         User { id: 1, name: "cc", data: Some([123, 97, 58, 49, 125]) }
+        //     )
+        // ]
+        assert_eq!(result.len(), 2);
 
         removeDB();
     }
