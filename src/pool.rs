@@ -89,14 +89,12 @@ mod test {
 
         let pool = Pool::new(10);
 
-        pool.execute(||{
-            let id = client.add_user(&User{
-                id: 0,
-                name: "cc".to_string(),
-                data: Some("{a:1}".as_bytes().to_vec())
-            }).unwrap();
-            assert_eq!(id, 1); 
-        });
+        let id = client.add_user(&User{
+            id: 0,
+            name: "cc".to_string(),
+            data: Some("{a:1}".as_bytes().to_vec())
+        }).unwrap();
+        assert_eq!(id, 1); 
 
         for _ in 0..100 {
             pool.execute(||{
