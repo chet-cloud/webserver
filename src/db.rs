@@ -1,14 +1,15 @@
 
 use rusqlite::{Connection, Result, OpenFlags};
-use std::fs;
+use std::{fs, sync::Arc};
+use std::sync::{Mutex, MutexGuard};
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct User {
     pub id: usize,
     pub name: String,
     pub data: Option<Vec<u8>>,
 }
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Record {
     pub id: String,
     pub day: String,
@@ -18,8 +19,9 @@ pub struct Record {
 }
 
 pub struct DbClient{
-    conn:Connection
+    conn:Arc<Mutex<Connection>>
 }
+
 
 impl DbClient {
     
@@ -31,11 +33,22 @@ impl DbClient {
             | OpenFlags::SQLITE_OPEN_URI
             // | OpenFlags::SQLITE_OPEN_NO_MUTEX
         )?;
-        return Ok(DbClient{conn:connection});
+        Self::init(&connection)?;
+        return Ok(DbClient{conn:Arc::new(Mutex::new(connection))});
     }
 
-    pub fn init(&self)-> Result<(), rusqlite::Error> {
-        self.conn.execute(
+    pub fn get_conn(&self)-> MutexGuard<Connection>{
+        let result = &self.conn;
+        let result = result.lock().unwrap();
+        return result;
+    }
+
+    pub fn clone(&self)-> DbClient{
+        DbClient{conn:Arc::clone(&self.conn)}
+    }
+
+    pub fn init(conn:&Connection)-> Result<(), rusqlite::Error> {
+        conn.execute(
             "
 
             CREATE TABLE IF NOT EXISTS User (
@@ -49,7 +62,7 @@ impl DbClient {
             (), // empty list of parameters.
         );
 
-        self.conn.execute(
+        conn.execute(
             "
 
             CREATE TABLE IF NOT EXISTS Record (
@@ -64,7 +77,7 @@ impl DbClient {
             (), // empty list of parameters.
         );
 
-        self.conn.execute(
+        conn.execute(
             "
             CREATE INDEX Record_id ON Record (id);
             ",
@@ -78,7 +91,7 @@ impl DbClient {
     // https://codebeautify.org/string-binary-converter
     // https://www.binaryhexconverter.com/binary-to-hex-converter
     pub fn insert_fake_date(&self)-> Result<usize, rusqlite::Error> {
-        return self.conn.execute(
+        return self.get_conn().execute(
             "
 
                 insert INTO User (id, name) VALUES ('2', '1', X'7B613A317D');
@@ -96,9 +109,9 @@ impl DbClient {
 
     }
 
-    pub fn add_user(&self,user : &User) -> Result<usize, rusqlite::Error> {
-
-        let mut stmt = self.conn.prepare("
+    pub fn add_user(&self, user : &User) -> Result<usize, rusqlite::Error> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare("
             insert into User (name,data) values (?1,?2) RETURNING id; 
         ")?;
         let result = stmt.query_map((user.name.to_string(),user.data.as_ref()), |row| {
@@ -109,7 +122,7 @@ impl DbClient {
     }
 
     pub fn update_user(&self,user : &User) -> Result<usize, rusqlite::Error> {
-        return self.conn.execute(
+        return self.get_conn().execute(
             "
                 UPDATE User
                 SET name = ?1, data = ?2
@@ -120,7 +133,8 @@ impl DbClient {
     }
 
     pub fn get_user_by_name(&self,name : &str) -> Result<User, rusqlite::Error> {
-        let mut stmt = self.conn.prepare("SELECT * FROM User where name is ?1")?;
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare("SELECT * FROM User where name is ?1")?;
         return stmt.query_map([name], |row| {
             Ok(User {
                 id: row.get(0)?,
@@ -131,7 +145,8 @@ impl DbClient {
     }
 
     pub fn get_user_by_id(&self,id :i32) -> Result<User, rusqlite::Error> {
-        let mut stmt = self.conn.prepare("select id, name, data from user where id = ?")?;
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare("select id, name, data from user where id = ?")?;
         let result = stmt.query_map([id], |row| {
             Ok(User {
                 id: row.get(0)?,
@@ -144,7 +159,7 @@ impl DbClient {
     }
 
     pub fn add_record(&self,record : &Record) -> Result<usize, rusqlite::Error> {
-        return self.conn.execute(
+        return self.get_conn().execute(
             "
                 insert into Record (id,day,userId,start,finish)
                 values (?1,?2,?3,?4,?5)
@@ -154,7 +169,8 @@ impl DbClient {
     }
 
     pub fn get_record_by_id(&self,id :&str) -> Result<Record, rusqlite::Error> {
-        let mut stmt = self.conn.prepare("
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare("
             select id, day, userId, start, finish
             from Record 
             where id = ?1
@@ -173,14 +189,14 @@ impl DbClient {
     }
 
     pub fn delete_record_by_id(&self,id : &str) -> Result<usize, rusqlite::Error> {
-        return Ok(self.conn.execute(
+        return Ok(self.get_conn().execute(
             "delete from Record where id = ?1",
             [id],
         )?);
     }
 
     pub fn update_record(&self,record : &Record) -> Result<usize, rusqlite::Error> {
-        return Ok(self.conn.execute(
+        return Ok(self.get_conn().execute(
             "
                 UPDATE Record
                 SET day = ?1, start = ?2, finish = ?3
@@ -191,7 +207,8 @@ impl DbClient {
     }
 
     pub fn get_records_by_like_roomid_day_userid(&self,id : &str, day: &str, userid:&str) -> Result<Vec<(Record, User)>, rusqlite::Error>{
-        let mut stmt = self.conn.prepare("
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare("
             SELECT Record.id, Record.day, Record.userId, Record.start, Record.finish, User.name, User.data 
             FROM Record 
             join User on User.id = Record.userId

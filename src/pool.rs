@@ -97,7 +97,8 @@ mod test {
         assert_eq!(id, 1); 
 
         for _ in 0..100 {
-            pool.execute(||{
+            let client = client.clone();
+            pool.execute(move||{
                 thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
                 let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 1, finish: 12 }).unwrap();
                 assert_eq!(result, 1);
@@ -105,7 +106,8 @@ mod test {
         }
 
         for _ in 0..100 {
-            pool.execute(||{
+            let client = client.clone();
+            pool.execute(move||{
                 thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
                 let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 13, finish: 36 }).unwrap();
                 assert_eq!(result, 1);
@@ -113,7 +115,8 @@ mod test {
         }
 
         for _ in 0..100 {
-            pool.execute(||{
+            let client = client.clone();
+            pool.execute(move||{
                 thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
                 let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 13, finish: 36 }).unwrap();
                 assert_eq!(result, 1);  
@@ -121,7 +124,8 @@ mod test {
         }
         
         for _ in 0..20 {
-            pool.execute(||{
+            let client = client.clone();
+            pool.execute(move||{
                 thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
                 let result = client.get_records_by_like_roomid_day_userid("room1-r1-r1","2022-10-09",&1.to_string()).unwrap();
                 //assert_eq!(result.len(), 3);
