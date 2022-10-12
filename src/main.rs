@@ -89,7 +89,7 @@ mod test {
             .execute("CREATE TABLE IF NOT EXISTS foo (bar INTEGER)", params![])
             .unwrap();
     
-        (0..1000)
+        (0..10000)
             .map(|i| {
                 let pool = pool.clone();
                 thread::spawn(move || {
