@@ -68,9 +68,10 @@ mod test {
     use super::*;
     use std::time::Duration;
     use rand::{Rng, thread_rng};
+    use crate::db::*;
 
     #[test]
-    fn test1() {
+    fn execute_test() {
 
         let pool = Pool::new(3);
 
@@ -81,4 +82,63 @@ mod test {
             });
         }
     }
+
+    #[test]
+    fn execute_sql_concurrent_test() {
+        let client = DbClient::new().unwrap();
+
+        let pool = Pool::new(10);
+
+        pool.execute(||{
+            let id = client.add_user(&User{
+                id: 0,
+                name: "cc".to_string(),
+                data: Some("{a:1}".as_bytes().to_vec())
+            }).unwrap();
+            assert_eq!(id, 1); 
+        });
+
+        for _ in 0..100 {
+            pool.execute(||{
+                thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
+                let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 1, finish: 12 }).unwrap();
+                assert_eq!(result, 1);
+            });
+        }
+
+        for _ in 0..100 {
+            pool.execute(||{
+                thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
+                let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 13, finish: 36 }).unwrap();
+                assert_eq!(result, 1);
+            });
+        }
+
+        for _ in 0..100 {
+            pool.execute(||{
+                thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
+                let result = client.add_record(&Record { id: "room1-r1-r1".to_string(), day: "2022-10-09".to_string(), userId: 1, start: 13, finish: 36 }).unwrap();
+                assert_eq!(result, 1);  
+            });
+        }
+        
+        for _ in 0..20 {
+            pool.execute(||{
+                thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
+                let result = client.get_records_by_like_roomid_day_userid("room1-r1-r1","2022-10-09",&1.to_string()).unwrap();
+                //assert_eq!(result.len(), 3);
+                println!("result:{:?}",result);
+            });
+        }
+
+        thread::sleep(Duration::from_secs(5));
+        DbClient::removeDB();
+
+    }
+
+
+
+
+
+
 }
