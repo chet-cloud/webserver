@@ -96,7 +96,9 @@ mod test {
         }).unwrap();
         assert_eq!(id, 1); 
 
-        for _ in 0..20 {
+        let range = 800; // 800*3 request takes 60 sec, about 53 request/sec
+
+        for _ in 0..range {
             let client = client.clone();
             pool.execute(move||{
                 // thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
@@ -105,7 +107,7 @@ mod test {
             });
         }
 
-        for _ in 0..20 {
+        for _ in 0..range {
             let client = client.clone();
             pool.execute(move||{
                 // thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
@@ -114,7 +116,7 @@ mod test {
             });
         }
 
-        for _ in 0..20 {
+        for _ in 0..range {
             let client = client.clone();
             pool.execute(move||{
                 // thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
@@ -123,7 +125,7 @@ mod test {
             });
         }
         
-        for _ in 0..20 {
+        for _ in 0..range {
             let client = client.clone();
             pool.execute(move||{
                 // thread::sleep(Duration::from_secs(thread_rng().gen_range(0..3)));
@@ -133,7 +135,7 @@ mod test {
             });
         }
 
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_secs(3));
         DbClient::removeDB();
 
     }

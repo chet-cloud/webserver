@@ -1,6 +1,5 @@
 pub mod db;
 pub mod pool;
-pub mod cc;
 
 use std::io::Error;
 use std::thread::JoinHandle;
@@ -11,28 +10,12 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::thread;
 
-struct ThreadPool {
-    threads:Vec<JoinHandle<()>>,
-}
-
-impl ThreadPool {
-    pub fn new(size: usize) -> Result<ThreadPool, Error> {
-        assert!(size > 0);
-        let threads = Vec::with_capacity(size);
-        for _ in 0..size {
-            // create some threads and store them in the vector
-        }
-        Ok(ThreadPool {threads})
-    }
-
-}
 
 
 
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let pool = ThreadPool::new(4).unwrap();
     for stream in listener.incoming(){
         let stream = stream.unwrap();
 
