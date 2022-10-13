@@ -2,6 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+      function post(){
+        axios.post('/user', {
+          firstName: 'Fred',
+          lastName: 'Flintstone'
+        })
+        .then(function (response) {
+            console.log(response);
+        })
+        .catch(function (error) {
+            console.log(error);
+        });
+      }
+    </script>
     <title>Hello!</title>
   </head>
   <body>
