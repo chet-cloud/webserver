@@ -26,11 +26,11 @@ impl Pool{
                     let message = receiver.lock().unwrap().recv();
                     match message {
                         Ok(job) => {
-                            println!("Worker {i} got a job; executing.");
+                            //println!("Worker {i} got a job; executing.");
                             job();
                         }
                         Err(_) => {
-                            println!("Worker {i} disconnected; shutting down.");
+                            //println!("Worker {i} disconnected; shutting down.");
                             break;
                         }
                     }
